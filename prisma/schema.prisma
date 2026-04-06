@@ -1,0 +1,185 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PLAYER
+  ORGANIZER
+  ADMIN
+}
+
+enum TournamentStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING     // created but not completed
+  REGISTERED  // registrant filled details (including optional partner info)
+  CONFIRMED   // registration confirmed (e.g. after payment)
+  CANCELLED
+}
+
+enum GameStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String?  // optional for OAuth users
+  firstName    String
+  lastName     String
+  phone        String?
+  role         Role     @default(PLAYER)
+  provider     String?  // e.g. 'google'
+  providerId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  organizedTournaments Tournament[] @relation("OrganizerTournaments")
+  registrations        Registration[] @relation("registrant")
+  partnerRegistrations Registration[] @relation("partnerUser")
+  couplesAsPlayer1     Couple[] @relation("player1")
+  couplesAsPlayer2     Couple[] @relation("player2")
+  payments             Payment[] @relation("payerPayments")
+}
+
+model Tournament {
+  id                   String   @id @default(uuid()) @db.Uuid
+  organizer            User?    @relation("OrganizerTournaments", fields: [organizerId], references: [id])
+  organizerId          String?  @db.Uuid
+  title                String
+  description          String?
+  startDate            DateTime
+  endDate              DateTime
+  registrationDeadline DateTime
+  maxCouples           Int
+  registrationFee      Int
+  status               TournamentStatus @default(UPCOMING)
+  venueName            String?
+  venueAddress         String?
+  createdAt            DateTime @default(now())
+
+  // Relations
+  couples              Couple[]
+  games                Game[]
+  registrations        Registration[]
+}
+
+model Registration {
+  id              String   @id @default(uuid()) @db.Uuid
+  tournament      Tournament @relation(fields: [tournamentId], references: [id])
+  tournamentId    String   @db.Uuid
+
+  registrant      User     @relation("registrant", fields: [registrantId], references: [id])
+  registrantId    String   @db.Uuid
+
+  // If partner exists in system, link to their user record
+  partnerUser     User?    @relation("partnerUser", fields: [partnerUserId], references: [id])
+  partnerUserId   String?  @db.Uuid
+
+  // If registration converted to a Couple, link here (named relation)
+  couple          Couple?  @relation("RegistrationToCouple", fields: [coupleId], references: [id])
+  coupleId        String?  @db.Uuid @unique
+
+  status          RegistrationStatus @default(REGISTERED)
+  createdAt       DateTime @default(now())
+
+  // payments: allow multiple payment attempts for a registration
+  payments        Payment[]
+
+  @@unique([tournamentId, registrantId])
+}
+
+model Couple {
+  id               String   @id @default(uuid()) @db.Uuid
+  tournament       Tournament @relation(fields: [tournamentId], references: [id])
+  tournamentId     String   @db.Uuid
+
+  player1          User    @relation("player1", fields: [player1Id], references: [id])
+  player1Id        String  @db.Uuid
+  player2          User    @relation("player2", fields: [player2Id], references: [id])
+  player2Id        String  @db.Uuid
+
+  paymentStatus    PaymentStatus @default(PENDING)
+
+  // payments linked to this couple
+  payments         Payment[]
+
+  // Relation back to originating registration (named to match Registration)
+  originatingRegistration Registration? @relation("RegistrationToCouple")
+
+  // Games relations (required to pair relation names used in Game)
+  gamesAsCouple1   Game[]   @relation("CoupleToGame1")
+  gamesAsCouple2   Game[]   @relation("CoupleToGame2")
+  wonGames         Game[]   @relation("CoupleWonGames")
+
+  @@unique([tournamentId, player1Id, player2Id])
+}
+
+model Game {
+  id             String   @id @default(uuid()) @db.Uuid
+
+  tournament     Tournament @relation(fields: [tournamentId], references: [id])
+  tournamentId   String   @db.Uuid
+
+  couple1        Couple?  @relation("CoupleToGame1", fields: [couple1Id], references: [id])
+  couple1Id      String?  @db.Uuid
+  couple2        Couple?  @relation("CoupleToGame2", fields: [couple2Id], references: [id])
+  couple2Id      String?  @db.Uuid
+
+  roundNumber    Int
+  courtNumber    Int?
+
+  scheduledTime  DateTime?
+  status         GameStatus @default(SCHEDULED)
+
+  scoreCouple1   Int @default(0)
+  scoreCouple2   Int @default(0)
+
+  // winner relation
+  winnerCouple   Couple?  @relation("CoupleWonGames", fields: [winnerCoupleId], references: [id])
+  winnerCoupleId String?  @db.Uuid
+
+  createdAt      DateTime @default(now())
+}
+
+model Payment {
+  id                      String   @id @default(uuid()) @db.Uuid
+
+  // Link to registration (many payments allowed)
+  registration            Registration? @relation(fields: [registrationId], references: [id])
+  registrationId          String?  @db.Uuid
+
+  // Optional payer (user who made the payment)
+  payer                   User?    @relation("payerPayments", fields: [payerId], references: [id])
+  payerId                 String?  @db.Uuid
+
+  // Optionally link to a couple
+  couple                  Couple?  @relation(fields: [coupleId], references: [id])
+  coupleId                String?  @db.Uuid
+
+  amount                  Int
+  paymentMethod           String?
+  status                  PaymentStatus @default(PENDING)
+  createdAt               DateTime @default(now())
+}
