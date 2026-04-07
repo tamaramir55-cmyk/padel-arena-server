@@ -7,11 +7,7 @@ import { UpdateUserDto } from "./dto/update-user.dto";
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: CreateUserDto) {
-    return this.prisma.user.create({ data });
-  }
-
-  findAll() {
+  async findAll() {
     return this.prisma.user.findMany();
   }
 
@@ -21,11 +17,15 @@ export class UsersService {
     return user;
   }
 
-  update(id: string, data: UpdateUserDto) {
+  async create(data: CreateUserDto) {
+    return this.prisma.user.create({ data });
+  }
+
+  async update(id: string, data: UpdateUserDto) {
     return this.prisma.user.update({ where: { id }, data });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
     return this.prisma.user.delete({ where: { id } });
   }
 }
