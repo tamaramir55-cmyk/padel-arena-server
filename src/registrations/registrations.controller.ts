@@ -10,10 +10,4 @@ export class RegistrationsController {
   create(@Body() dto: CreateRegistrationDto) {
     return this.svc.createRegistration(dto);
   }
-
-  // webhook endpoint to inform that payment succeeded
-  @Post(':id/payment-succeeded')
-  paymentSucceeded(@Param('id') id: string, @Body() body: any) {
-    return this.svc.handlePaymentSucceeded(id, body);
-  }
 }
