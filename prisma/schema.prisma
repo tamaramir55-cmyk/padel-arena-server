@@ -13,6 +13,11 @@ enum Role {
   ADMIN
 }
 
+enum Provider {
+  LOCAL
+  GOOGLE
+}
+
 enum TournamentStatus {
   UPCOMING
   ACTIVE
@@ -44,13 +49,12 @@ enum PaymentStatus {
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
-  passwordHash String?  // optional for OAuth users
+  passwordHash String
   firstName    String
   lastName     String
   phone        String?
   role         Role     @default(PLAYER)
-  provider     String?  // e.g. 'google'
-  providerId   String?
+  provider     Provider @default(LOCAL)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
